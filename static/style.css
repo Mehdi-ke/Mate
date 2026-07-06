@@ -1,3 +1,15 @@
+:root {
+    --bg: #f4f4f4;
+    --surface: #ffffff;
+    --accent: #1a1a2e;
+    --accent-hover: #2d2d5e;
+    --text: #333;
+    --text-secondary: #555;
+    --text-muted: #aaa;
+    --border: #e0e0e0;
+    --radius: 8px;
+}
+
 *,
 *::before,
 *::after {
@@ -7,32 +19,73 @@
 body {
     margin: 0;
     font-size: 16px;
-    font-family: sans-serif;
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
 }
 
 img {
     max-width: 100%;
 }
 
-nav,
+/* Branded top bar — appears on every page via base.html */
+nav {
+    background: var(--accent);
+    padding: 1rem 1.5rem;
+}
+
+nav a {
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 1.25rem;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+}
+
 main {
-    padding: 1rem;
+    padding: 1.5rem;
+}
+
+/* Home landing */
+main h1 {
+    font-size: 2rem;
+    margin: 0 0 0.25rem;
 }
 
 .tagline {
-    color: #555;
+    color: var(--text-secondary);
+    margin: 0 0 1.5rem;
+    font-size: 1.05rem;
 }
 
 .tool-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1rem;
+    gap: 1.25rem;
 }
 
 .tool-card {
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    padding: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    transition: box-shadow 0.15s ease;
+}
+
+.tool-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.tool-card h2 {
+    margin: 0 0 0.5rem;
+    color: var(--accent);
+}
+
+.tool-card p {
+    color: var(--text-secondary);
+    margin: 0 0 1.25rem;
+    line-height: 1.5;
 }
 
 .button {
@@ -41,8 +94,14 @@ main {
     justify-content: center;
     min-height: 44px;
     padding: 0 1.5rem;
-    border: 1px solid #333;
-    border-radius: 4px;
-    color: inherit;
+    background: var(--accent);
+    border: none;
+    border-radius: var(--radius);
+    color: #ffffff;
+    font-weight: 500;
     text-decoration: none;
+}
+
+.button:hover {
+    background: var(--accent-hover);
 }

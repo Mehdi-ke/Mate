@@ -3,7 +3,7 @@
 {% block content %}
   <style>
     html, body { height: 100%; }
-    body { font-family: 'Inter', sans-serif; background: #0d1117; color: #e6edf3; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); }
 
     /* FIX: fill the space below Mate's nav instead of the whole viewport,
        so the chat area scrolls internally and the page itself does not. */
@@ -14,27 +14,34 @@
     .msg { display: flex; flex-direction: column; gap: 4px; max-width: 80%; }
     .msg.user { align-self: flex-end; align-items: flex-end; }
     .msg.assistant { align-self: flex-start; }
-    .msg-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #484f58; }
-    .msg-bubble { padding: 12px 16px; border-radius: 8px; font-size: 14px; line-height: 1.7; }
-    .msg.user .msg-bubble { background: #1c2128; border: 1px solid #30363d; color: #e6edf3; }
-    .msg.assistant .msg-bubble { background: #0d2818; border: 1px solid #1a4128; color: #c9d1d9; }
+    .msg-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
+    .msg-bubble { padding: 12px 16px; border-radius: var(--radius); font-size: 14px; line-height: 1.7; }
+    .msg.user .msg-bubble { background: #fafafa; border: 1px solid var(--border); color: var(--text); }
+    .msg.assistant .msg-bubble { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
     .msg.assistant .msg-bubble p { margin-bottom: 8px; }
     .msg.assistant .msg-bubble p:last-child { margin-bottom: 0; }
     .msg.assistant .msg-bubble ul, .msg.assistant .msg-bubble ol { padding-left: 20px; margin-bottom: 8px; }
     .msg.assistant .msg-bubble li { margin-bottom: 4px; }
-    .msg.assistant .msg-bubble strong { color: #3fb950; font-weight: 500; }
-    .msg.assistant .msg-bubble h1, .msg.assistant .msg-bubble h2, .msg.assistant .msg-bubble h3 { color: #58a6ff; margin-bottom: 8px; font-weight: 500; }
+    .msg.assistant .msg-bubble strong { color: var(--accent); font-weight: 600; }
+    .msg.assistant .msg-bubble h1, .msg.assistant .msg-bubble h2, .msg.assistant .msg-bubble h3 { color: var(--accent); margin-bottom: 8px; font-weight: 600; }
 
-    .assistant-bar { padding: 8px 24px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #21262d; }
-    .assistant-bar .new-chat { background: none; border: 1px solid #30363d; border-radius: 6px; padding: 4px 10px; color: #8b949e; font-size: 12px; font-family: 'JetBrains Mono', monospace; cursor: pointer; margin-left: auto; text-decoration: none; }
-    .assistant-bar .new-chat:hover { border-color: #58a6ff; color: #58a6ff; }
+    .assistant-bar { padding: 8px 24px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
+    .assistant-bar .new-chat { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; color: var(--text-secondary); font-size: 12px; font-family: 'JetBrains Mono', monospace; cursor: pointer; margin-left: auto; text-decoration: none; }
+    .assistant-bar .new-chat:hover { border-color: var(--accent); color: var(--accent); }
 
-    .input-area { background: #161b22; border-top: 1px solid #21262d; padding: 16px 24px; display: flex; gap: 12px; align-items: flex-end; }
-    .input-area textarea { flex: 1; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px; color: #e6edf3; font-size: 14px; font-family: 'Inter', sans-serif; resize: none; outline: none; line-height: 1.5; }
-    .input-area textarea:focus { border-color: #58a6ff; }
-    .input-area textarea::placeholder { color: #484f58; }
-    .input-area button { background: #238636; border: none; border-radius: 8px; padding: 10px 20px; color: #fff; font-size: 14px; font-family: 'Inter', sans-serif; font-weight: 500; cursor: pointer; white-space: nowrap; }
-    .input-area button:hover { background: #2ea043; }
+    .input-area { background: var(--surface); border-top: 1px solid var(--border); padding: 16px 24px; display: flex; gap: 12px; align-items: flex-end; }
+    .input-area textarea { flex: 1; min-width: 0; background: #fafafa; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; color: var(--text); font-size: 14px; font-family: 'Inter', sans-serif; resize: none; outline: none; line-height: 1.5; }
+    .input-area textarea:focus { border-color: var(--accent); }
+    .input-area textarea::placeholder { color: var(--text-muted); }
+    .input-area button { background: var(--accent); border: none; border-radius: var(--radius); padding: 10px 20px; color: #fff; font-size: 14px; font-family: 'Inter', sans-serif; font-weight: 500; cursor: pointer; white-space: nowrap; }
+    .input-area button:hover { background: var(--accent-hover); }
+
+    /* Give the input row more room on narrow phones so nothing is clipped. */
+    @media (max-width: 480px) {
+      .input-area { padding: 12px; gap: 8px; }
+      .chat-area { padding: 16px; }
+      .assistant-bar { padding: 8px 16px; }
+    }
   </style>
 
   <div class="assistant-bar">
