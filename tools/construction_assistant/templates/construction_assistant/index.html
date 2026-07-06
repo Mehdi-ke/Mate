@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <style>
+    html, body { height: 100%; }
+    body { font-family: 'Inter', sans-serif; background: #0d1117; color: #e6edf3; }
+
+    /* FIX: fill the space below Mate's nav instead of the whole viewport,
+       so the chat area scrolls internally and the page itself does not. */
+    body { display: flex; flex-direction: column; }
+    main { flex: 1; min-height: 0; padding: 0; display: flex; flex-direction: column; }
+
+    .chat-area { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+    .msg { display: flex; flex-direction: column; gap: 4px; max-width: 80%; }
+    .msg.user { align-self: flex-end; align-items: flex-end; }
+    .msg.assistant { align-self: flex-start; }
+    .msg-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #484f58; }
+    .msg-bubble { padding: 12px 16px; border-radius: 8px; font-size: 14px; line-height: 1.7; }
+    .msg.user .msg-bubble { background: #1c2128; border: 1px solid #30363d; color: #e6edf3; }
+    .msg.assistant .msg-bubble { background: #0d2818; border: 1px solid #1a4128; color: #c9d1d9; }
+    .msg.assistant .msg-bubble p { margin-bottom: 8px; }
+    .msg.assistant .msg-bubble p:last-child { margin-bottom: 0; }
+    .msg.assistant .msg-bubble ul, .msg.assistant .msg-bubble ol { padding-left: 20px; margin-bottom: 8px; }
+    .msg.assistant .msg-bubble li { margin-bottom: 4px; }
+    .msg.assistant .msg-bubble strong { color: #3fb950; font-weight: 500; }
+    .msg.assistant .msg-bubble h1, .msg.assistant .msg-bubble h2, .msg.assistant .msg-bubble h3 { color: #58a6ff; margin-bottom: 8px; font-weight: 500; }
+
+    .assistant-bar { padding: 8px 24px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #21262d; }
+    .assistant-bar .new-chat { background: none; border: 1px solid #30363d; border-radius: 6px; padding: 4px 10px; color: #8b949e; font-size: 12px; font-family: 'JetBrains Mono', monospace; cursor: pointer; margin-left: auto; text-decoration: none; }
+    .assistant-bar .new-chat:hover { border-color: #58a6ff; color: #58a6ff; }
+
+    .input-area { background: #161b22; border-top: 1px solid #21262d; padding: 16px 24px; display: flex; gap: 12px; align-items: flex-end; }
+    .input-area textarea { flex: 1; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px; color: #e6edf3; font-size: 14px; font-family: 'Inter', sans-serif; resize: none; outline: none; line-height: 1.5; }
+    .input-area textarea:focus { border-color: #58a6ff; }
+    .input-area textarea::placeholder { color: #484f58; }
+    .input-area button { background: #238636; border: none; border-radius: 8px; padding: 10px 20px; color: #fff; font-size: 14px; font-family: 'Inter', sans-serif; font-weight: 500; cursor: pointer; white-space: nowrap; }
+    .input-area button:hover { background: #2ea043; }
+  </style>
+
+  <div class="assistant-bar">
+    <a href="{{ url_for('construction_assistant.home') }}" class="new-chat">+ new chat</a>
+  </div>
+
+  <div class="chat-area" id="chatArea">
+
+    <div class="msg assistant">
+      <span class="msg-label">// assistant</span>
+      <div class="msg-bubble">
+        <p>Hello! I'm your construction AI assistant. Ask me anything about estimating, tendering, contracts, BIM, or site management.</p>
+      </div>
+    </div>
+
+    {% for msg in history %}
+      {% if msg.role == "user" %}
+      <div class="msg user">
+        <span class="msg-label">you //</span>
+        <div class="msg-bubble">{{ msg.content }}</div>
+      </div>
+      {% else %}
+      <div class="msg assistant">
+        <span class="msg-label">// assistant</span>
+        <div class="msg-bubble">{{ msg.content | safe }}</div>
+      </div>
+      {% endif %}
+    {% endfor %}
+
+  </div>
+
+  <form method="POST" action="{{ url_for('construction_assistant.chat') }}">
+    <div class="input-area">
+      <textarea name="user_message" rows="1" placeholder="Ask a construction question..."></textarea>
+      <button type="submit">Ask</button>
+    </div>
+  </form>
+
+  <script>
+    const chatArea = document.getElementById('chatArea');
+    chatArea.scrollTop = chatArea.scrollHeight;
+  </script>
+{% endblock %}

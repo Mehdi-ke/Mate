@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Mate</h1>
+<p class="tagline">Construction tools that do the paperwork for you.</p>
+
+<div class="tool-grid">
+    <div class="tool-card">
+        <h2>Site Report Generator</h2>
+        <p>Describe your day by voice or text — get a formal site report in seconds.</p>
+        <a class="button" href="{{ url_for('site_report.home') }}">Open</a>
+    </div>
+    <div class="tool-card">
+        <h2>Construction AI Assistant</h2>
+        <p>Ask about JCT/NEC contracts, estimating, BIM, and site management — get UK-calibrated answers.</p>
+        <a class="button" href="{{ url_for('construction_assistant.home') }}">Open</a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,664 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      background: #f4f4f4;
+      color: #333;
+    }
+
+    header {
+      background: #1a1a2e;
+      color: white;
+      padding: 20px 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header h1 { font-size: 20px; font-weight: 600; }
+    header span { font-size: 13px; color: #8888aa; }
+
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      padding: 32px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .panel {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .panel h2 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 6px;
+      margin-top: 16px;
+    }
+
+    label:first-of-type { margin-top: 0; }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      color: #333;
+      outline: none;
+    }
+
+    input[type="text"]:focus { border-color: #1a1a2e; }
+
+    textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      color: #333;
+      resize: vertical;
+      outline: none;
+      line-height: 1.6;
+    }
+
+    textarea:focus { border-color: #1a1a2e; }
+
+    .file-upload {
+      margin-top: 16px;
+      border: 2px dashed #ddd;
+      border-radius: 6px;
+      padding: 16px;
+      text-align: center;
+      background: #fafafa;
+    }
+
+    .file-upload input[type="file"] {
+      width: 100%;
+      font-size: 13px;
+      color: #555;
+    }
+
+    .file-upload p {
+      font-size: 12px;
+      color: #aaa;
+      margin-top: 8px;
+    }
+
+    .upload-message {
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .upload-message.success {
+      background: #e6f4ea;
+      color: #2d6a3f;
+      border: 1px solid #b7dfbf;
+    }
+
+    .upload-message.error {
+      background: #fce8e8;
+      color: #8b2020;
+      border: 1px solid #f5c0c0;
+    }
+
+    button {
+      margin-top: 20px;
+      width: 100%;
+      padding: 12px;
+      background: #1a1a2e;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:hover { background: #2d2d5e; }
+
+    .report-box {
+      background: #fafafa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 20px;
+      font-size: 14px;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      font-family: 'Arial', sans-serif;
+      min-height: 300px;
+    }
+
+    .report-box.empty {
+      color: #aaa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-style: italic;
+    }
+
+    .print-btn {
+      margin-top: 16px;
+      width: 100%;
+      padding: 10px;
+      background: white;
+      color: #1a1a2e;
+      border: 2px solid #1a1a2e;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .print-btn:hover { background: #f0f0f0; }
+
+    .site-photo {
+      margin-top: 16px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .photo-label {
+      background: #1a1a2e;
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .site-photo img {
+      width: 100%;
+      display: block;
+      max-height: 400px;
+      object-fit: cover;
+    }
+
+    .voice-input-wrapper {
+      position: relative;
+    }
+
+    .voice-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    #micBtn {
+      margin-top: 0;
+      width: auto;
+      padding: 8px 16px;
+      background: #1a1a2e;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    #micBtn.listening {
+      background: #c0392b;
+      animation: pulse 1.5s infinite;
+    }
+
+    #micBtn:hover { background: #2d2d5e; }
+    #micBtn.listening:hover { background: #e74c3c; }
+
+    #voiceStatus {
+      font-size: 12px;
+      color: #888;
+      font-style: italic;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.6; }
+      100% { opacity: 1; }
+    }
+
+    .help-panel {
+      margin-bottom: 20px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .help-panel summary {
+      padding: 12px 16px;
+      background: #f8f8f8;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: #1a1a2e;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+    }
+
+    .help-panel summary::-webkit-details-marker { display: none; }
+
+    .help-panel[open] summary {
+      background: #1a1a2e;
+      color: white;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .help-content {
+      padding: 16px;
+      background: #fafafa;
+    }
+
+    .help-intro {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 12px;
+    }
+
+    .help-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .help-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 10px;
+    }
+
+    .help-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .help-item strong {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 2px;
+    }
+
+    .help-item p {
+      font-size: 11px;
+      color: #666;
+      margin: 0 0 3px;
+    }
+
+    .help-item em {
+      font-size: 10px;
+      color: #888;
+      font-style: italic;
+    }
+
+    .help-example {
+      background: #e8f0fe;
+      border: 1px solid #c5d5f5;
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 11px;
+    }
+
+    .help-example strong {
+      display: block;
+      color: #1a1a2e;
+      margin-bottom: 4px;
+      font-size: 11px;
+    }
+
+    .help-example p {
+      color: #333;
+      line-height: 1.5;
+      margin: 0;
+      font-style: italic;
+      font-size: 11px;
+    }
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .checkbox-row input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .checkbox-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      margin: 0;
+      cursor: pointer;
+    }
+
+    .transcript-box {
+      margin-top: 16px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .transcript-label {
+      background: #f0f0f0;
+      color: #555;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .transcript-text {
+      padding: 12px;
+      font-size: 13px;
+      color: #444;
+      line-height: 1.7;
+      background: #fafafa;
+      white-space: pre-wrap;
+    }
+
+    @media print {
+      .transcript-box { margin-top: 24px; page-break-inside: avoid; }
+    }
+
+    @media print {
+      header, .panel:first-child, .print-btn { display: none; }
+      .container { grid-template-columns: 1fr; padding: 0; }
+      .panel { border: none; box-shadow: none; }
+      .site-photo { margin-top: 24px; page-break-inside: avoid; }
+      .site-photo img { max-height: none; }
+      .help-panel { display: none; }
+    }
+
+    @media (max-width: 768px) {
+      .container { grid-template-columns: 1fr; }
+    }
+
+  </style>
+
+  <header>
+    <h1>Site Report Generator</h1>
+    <span>Powered by Claude AI</span>
+  </header>
+
+  <div class="container">
+
+    <div class="panel">
+      <h2>Site Report</h2>
+
+
+      <details class="help-panel">
+        <summary>💡 What to include in your report</summary>
+        <div class="help-content">
+          <p class="help-intro">Describe your day in plain English — by typing or speaking. Cover as many of these as you can:</p>
+          <div class="help-grid">
+            <div class="help-item">
+              <span class="help-icon">📍</span>
+              <div>
+                <strong>Site & Project</strong>
+                <p>Site name, location, project name</p>
+                <em>"We are at the Victory project in Manchester"</em>
+              </div>
+            </div>
+            <div class="help-item">
+              <span class="help-icon">🌤️</span>
+              <div>
+                <strong>Weather</strong>
+                <p>Conditions that affected work</p>
+                <em>"Weather was sunny and warm today"</em>
+              </div>
+            </div>
+            <div class="help-item">
+              <span class="help-icon">👷</span>
+              <div>
+                <strong>Workforce</strong>
+                <p>Number of workers or trades on site</p>
+                <em>"We had 6 labourers and 2 bricklayers on site"</em>
+              </div>
+            </div>
+            <div class="help-item">
+              <span class="help-icon">✅</span>
+              <div>
+                <strong>Activities Completed</strong>
+                <p>What was actually finished today</p>
+                <em>"We completed the flooring concrete on grid C"</em>
+              </div>
+            </div>
+            <div class="help-item">
+              <span class="help-icon">🧱</span>
+              <div>
+                <strong>Materials</strong>
+                <p>What was used today and what is needed</p>
+                <em>"We used 50 blocks. We need 100 bags of cement"</em>
+              </div>
+            </div>
+            <div class="help-item">
+              <span class="help-icon">🚜</span>
+              <div>
+                <strong>Plant & Equipment</strong>
+                <p>Machinery or tools used</p>
+                <em>"The excavator was used to level the ground"</em>
+              </div>
+            </div>
+            <div class="help-item">
+              <span class="help-icon">⚠️</span>
+              <div>
+                <strong>Issues & Problems</strong>
+                <p>Delays, shortages, defects, access problems</p>
+                <em>"Concrete delivery arrived 2 hours late"</em>
+              </div>
+            </div>
+            <div class="help-item">
+              <span class="help-icon">🦺</span>
+              <div>
+                <strong>Safety</strong>
+                <p>Incidents, near misses, hazards, PPE observations</p>
+                <em>"No incidents today. All workers wearing PPE"</em>
+              </div>
+            </div>
+            <div class="help-item">
+              <span class="help-icon">📅</span>
+              <div>
+                <strong>Next Day Plan</strong>
+                <p>What is planned for tomorrow</p>
+                <em>"Tomorrow we will begin paving works"</em>
+              </div>
+            </div>
+          </div>
+          <div class="help-example">
+            <strong>Example voice report:</strong>
+            <p>"We are at the City Road development in Manchester. Weather was sunny today. We had 4 labourers on site. We finished laying the drainage run on the east side. The excavator was used for ground levelling. We used 20 concrete blocks and need a delivery of 50 more tomorrow. There was a near miss with a forklift near the welfare unit — reported to site manager. Tomorrow we plan to start the pile caps on zone 2, concrete pump is booked for 7am."</p>
+          </div>
+        </div>
+      </details>
+
+
+      <form method="POST" action="{{ url_for('site_report.generate') }}" enctype="multipart/form-data">
+        <label>Site Name</label>
+        <input type="text" name="site_name" placeholder="e.g. City Road Development, Manchester" value="{{ site_name or '' }}">
+
+        <label>Describe your day on site</label>
+        <div class="voice-input-wrapper">
+          <textarea name="worker_input" id="worker_input" rows="10" placeholder="Describe what happened today in your own words — or click the microphone to speak...">{{ worker_input or '' }}</textarea>
+          <div class="voice-controls">
+            <button type="button" id="micBtn" onclick="toggleVoice()">
+              🎤 Start Speaking
+            </button>
+            <span id="voiceStatus"></span>
+          </div>
+        </div>
+
+        <label>Site Photo (optional)</label>
+        <div class="file-upload">
+          <input type="file" name="site_photo" accept=".png,.jpg,.jpeg,.gif,.pdf">
+          <p>PNG, JPG, GIF or PDF — max 5MB</p>
+        </div>
+
+        {% if upload_message %}
+          <div class="upload-message {{ 'success' if 'uploaded' in upload_message.lower() else 'error' }}">
+            {{ upload_message }}
+          </div>
+        {% endif %}
+
+        {% if validation_error %}
+        <div class="upload-message error">
+          ⚠️ {{ validation_error }}
+        </div>
+        {% endif %}
+
+        <div class="checkbox-row">
+          <input type="checkbox" name="include_transcript" id="include_transcript" value="yes">
+          <label for="include_transcript" class="checkbox-label">Include original voice/text transcript at end of report</label>
+        </div>
+
+        <button type="submit">Generate Site Report</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Generated Report</h2>
+      {% if report %}
+        <div class="report-box">{{ report }}</div>
+
+        {% if image_data %}
+        <div class="site-photo">
+          <p class="photo-label">Site Photo</p>
+          <img src="data:{{ media_type }};base64,{{ image_data }}" alt="Site photo">
+        </div>
+        {% endif %}
+
+        <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+      {% else %}
+        <div class="report-box empty">Your generated report will appear here...</div>
+      {% endif %}
+
+      {% if worker_input and include_transcript %}
+        <div class="transcript-box">
+          <p class="transcript-label">Original Transcript</p>
+          <p class="transcript-text">{{ worker_input }}</p>
+        </div>
+        {% endif %}
+
+    </div>
+
+  </div>
+  <script>
+    let recognition = null;
+    let isListening = false;
+
+    function toggleVoice() {
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert('Voice input is not supported in this browser. Please use Chrome or Edge.');
+        return;
+      }
+
+      if (isListening) {
+        stopVoice();
+      } else {
+        startVoice();
+      }
+    }
+
+    function startVoice() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-GB';
+
+      const textarea = document.getElementById('worker_input');
+      const micBtn = document.getElementById('micBtn');
+      const voiceStatus = document.getElementById('voiceStatus');
+
+      let finalTranscript = textarea.value;
+
+      recognition.onstart = function() {
+        isListening = true;
+        micBtn.textContent = '⏹ Stop Speaking';
+        micBtn.classList.add('listening');
+        voiceStatus.textContent = 'Listening...';
+      };
+
+      recognition.onresult = function(event) {
+        let interimTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript + ' ';
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+
+        textarea.value = finalTranscript + interimTranscript;
+      };
+
+      recognition.onerror = function(event) {
+        voiceStatus.textContent = 'Error: ' + event.error;
+        stopVoice();
+      };
+
+      recognition.onend = function() {
+        if (isListening) {
+          recognition.start();
+        }
+      };
+
+      recognition.start();
+    }
+
+    function stopVoice() {
+      if (recognition) {
+        recognition.stop();
+        recognition = null;
+      }
+
+      isListening = false;
+      const micBtn = document.getElementById('micBtn');
+      const voiceStatus = document.getElementById('voiceStatus');
+
+      micBtn.textContent = '🎤 Start Speaking';
+      micBtn.classList.remove('listening');
+      voiceStatus.textContent = 'Done — review and submit when ready.';
+    }
+  </script>
+{% endblock %}
