@@ -1,5 +1,5 @@
 from flask import Flask, render_template
-
+from flask_sqlalchemy import SQLAlchemy
 from config import Config
 from tools.site_report.routes import bp as site_report_bp
 from tools.construction_assistant.routes import bp as construction_assistant_bp
@@ -7,6 +7,8 @@ from tools.construction_assistant.routes import bp as construction_assistant_bp
 app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = app.config["SECRET_KEY"]
+
+db = SQLAlchemy(app)
 
 app.register_blueprint(site_report_bp)
 app.register_blueprint(construction_assistant_bp)
