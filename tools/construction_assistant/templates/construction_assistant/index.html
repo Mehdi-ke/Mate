@@ -42,10 +42,14 @@
       .chat-area { padding: 16px; }
       .assistant-bar { padding: 8px 16px; }
     }
+    .locked-area { flex-direction: column; gap: 12px; text-align: center; }
+    .locked-message { color: var(--text-secondary); font-size: 13px; margin: 0; }
+    .new-chat-btn { display: inline-block; background: var(--accent); color: #fff; text-decoration: none; padding: 10px 20px; border-radius: var(--radius); font-size: 14px; font-family: 'Inter', sans-serif; font-weight: 500; }
+    .new-chat-btn:hover { background: var(--accent-hover); }
   </style>
 
   <div class="assistant-bar">
-    <a href="{{ url_for('construction_assistant.home') }}" class="new-chat">+ new chat</a>
+    <a href="{{ url_for('construction_assistant.new') }}" class="new-chat">+ new chat</a>
   </div>
 
   <div class="chat-area" id="chatArea">
@@ -73,12 +77,25 @@
 
   </div>
 
+  {% if locked %}
+  <div class="input-area locked-area">
+    <p class="locked-message">
+      This conversation has reached its length limit. The summary above has been prepared for you to carry into a fresh chat.
+    </p>
+    <a href="{{ url_for('construction_assistant.home') }}" class="new-chat-btn">Start new chat with this context</a>
+  </div>
+{% else %}
   <form method="POST" action="{{ url_for('construction_assistant.chat') }}">
     <div class="input-area">
-      <textarea name="user_message" rows="1" placeholder="Ask a construction question..."></textarea>
+      <textarea name="user_message" rows="1" placeholder="Ask a construction question...">{% if prefill %}Here's context from my previous chat:
+
+{{ prefill }}
+
+Continuing from there — {% endif %}</textarea>
       <button type="submit">Ask</button>
     </div>
   </form>
+{% endif %}
 
   <script>
     const chatArea = document.getElementById('chatArea');

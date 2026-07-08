@@ -1,11 +1,12 @@
 from datetime import datetime
 
-from app import db
+from extensions import db
 
 
 class Conversation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    summary = db.Column(db.Text, nullable=True)
 
     messages = db.relationship("Message", backref="conversation", lazy=True)
 
