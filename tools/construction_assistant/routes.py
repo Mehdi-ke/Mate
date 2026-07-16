@@ -1,9 +1,13 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for
+import os
+import uuid
+from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify
 import anthropic
 import markdown
+from pypdf import PdfReader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from extensions import db
-from models import Conversation, Message
+from extensions import db, doc_collection
+from models import Conversation, Message, Document
 
 bp = Blueprint(
     "construction_assistant",
@@ -15,14 +19,29 @@ bp = Blueprint(
 client = anthropic.Anthropic()
 
 MESSAGE_CAP = 10
-WARNING_AT = 7   # count after saving user msg = 7 → this reply is the warning
-SUMMARY_AT = 9   # count after saving user msg = 9 → this reply is the summary
+WARNING_AT = 7
+SUMMARY_AT = 9
+MAX_DOCUMENTS = 3
+UPLOAD_FOLDER = "instance/uploads"
+
+# Chroma distance below which a retrieved chunk counts as genuinely relevant.
+# Lower = stricter. Tuned against observed distances (~0.55 for a real hit,
+# ~1.3 for an unrelated chunk). Adjust after testing with your own documents.
+RELEVANCE_THRESHOLD = 1.5
 
 BASE_SYSTEM_PROMPT = "You are a construction technology advisor specialising in the UK construction industry. Provide clear, practical, and accurate guidance on construction technology, digital workflows, BIM, UK contract forms, CDM Regulations, site management, project delivery, and industry best practices. Tailor responses to UK standards and terminology, explain technical concepts in a concise and professional manner, highlight compliance or safety considerations where relevant, and acknowledge uncertainty rather than making unsupported assumptions. Match the length of your response to the depth of the question — be brief for simple questions and thorough for complex ones, but never pad."
 
 WARNING_SUFFIX = " IMPORTANT: This is the fourth of five exchanges in this conversation. After answering the user's question normally, end your reply with a brief, friendly note (one short sentence) that you're approaching a good moment to start a fresh chat soon."
 
 SUMMARY_SUFFIX = " IMPORTANT: This is the final exchange in this conversation. Instead of answering normally, produce a concise summary of the entire conversation as 3-5 bullet points capturing the key questions asked and the key guidance given. Format it so the user can paste it into a new chat as context. Start with a brief sentence explaining this is a wrap-up summary, then the bullets."
+
+# Appended ONLY when relevant document evidence was found (the RAG path).
+RAG_SUFFIX = """
+
+The user has uploaded documents to this conversation, and the excerpts below were retrieved as relevant to their latest question. Base your answer primarily on these excerpts, citing what the documents say. Where the excerpts don't fully cover the question, you may supplement with general knowledge — but make clear which parts come from the documents and which are general knowledge.
+
+Relevant excerpts:
+{context}"""
 
 
 def get_or_create_conversation():
@@ -48,6 +67,44 @@ def render_history(messages):
     return rendered
 
 
+def get_documents_for(conv):
+    if not conv:
+        return []
+    return Document.query.filter_by(conversation_id=conv.id).order_by(Document.uploaded_at).all()
+
+
+def retrieve_relevant_context(conv, question):
+    """Return joined excerpt text if relevant evidence exists, else None.
+
+    Relevance is decided by Chroma's distance on the best-matching chunk:
+    if even the closest chunk is farther than RELEVANCE_THRESHOLD, we treat
+    the documents as not relevant to this question and return None, so the
+    caller falls back to the normal general-answer path.
+    """
+    documents = get_documents_for(conv)
+    if not documents:
+        return None
+
+    doc_ids = [d.doc_id for d in documents]
+    results = doc_collection.query(
+        query_texts=[question],
+        n_results=3,
+        where={"doc_id": {"$in": doc_ids}},
+    )
+
+    chunks = results["documents"][0] if results["documents"] else []
+    distances = results["distances"][0] if results["distances"] else []
+
+    if not chunks or not distances:
+        return None
+
+    # distances come back sorted nearest-first, so distances[0] is the best match
+    if distances[0] > RELEVANCE_THRESHOLD:
+        return None
+
+    return "\n\n---\n\n".join(chunks)
+
+
 @bp.route("/")
 def home():
     carry = session.pop("carry_context", None)
@@ -61,6 +118,7 @@ def home():
                 history=render_history(conv.messages),
                 locked=False,
                 prefill=None,
+                documents=get_documents_for(conv),
             )
 
     session.pop("conversation_id", None)
@@ -69,6 +127,7 @@ def home():
         history=[],
         locked=False,
         prefill=carry,
+        documents=[],
     )
 
 
@@ -78,6 +137,80 @@ def new():
     session.pop("carry_context", None)
     return redirect(url_for("construction_assistant.home"))
 
+def retrieve_relevant_context(conv, question):
+    """Decide how uploaded documents relate to this question.
+
+    Returns one of:
+      ("relevant", excerpt_text)  - relevant evidence found -> RAG path
+      ("no_match", None)          - docs exist but none relevant -> notice
+      ("no_docs", None)           - no documents uploaded at all -> silent
+    """
+    documents = get_documents_for(conv)
+    if not documents:
+        return ("no_docs", None)
+
+    doc_ids = [d.doc_id for d in documents]
+    results = doc_collection.query(
+        query_texts=[question],
+        n_results=3,
+        where={"doc_id": {"$in": doc_ids}},
+    )
+
+    chunks = results["documents"][0] if results["documents"] else []
+    distances = results["distances"][0] if results["distances"] else []
+
+    if not chunks or not distances or distances[0] > RELEVANCE_THRESHOLD:
+        return ("no_match", None)
+
+    return ("relevant", "\n\n---\n\n".join(chunks))
+
+
+@bp.route("/upload-doc", methods=["POST"])
+def upload_doc():
+    conv = get_or_create_conversation()
+    documents = get_documents_for(conv)
+
+    upload_error = None
+    file = request.files.get("doc_file")
+
+    if len(documents) >= MAX_DOCUMENTS:
+        upload_error = f"You've reached the {MAX_DOCUMENTS}-document limit for this conversation."
+    elif not file or file.filename == "":
+        upload_error = "Please choose a PDF to upload."
+    elif not file.filename.lower().endswith(".pdf"):
+        upload_error = "Only PDF files are supported right now."
+
+    if upload_error:
+        return render_template(
+            "construction_assistant/index.html",
+            history=render_history(conv.messages),
+            locked=False,
+            prefill=None,
+            documents=documents,
+            upload_error=upload_error,
+        )
+
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    save_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(save_path)
+
+    reader = PdfReader(save_path)
+    full_text = "\n".join(page.extract_text() for page in reader.pages)
+
+    splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
+    chunks = splitter.split_text(full_text)
+
+    doc_id = str(uuid.uuid4())
+    ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
+    metadatas = [{"doc_id": doc_id} for _ in chunks]
+    doc_collection.add(documents=chunks, ids=ids, metadatas=metadatas)
+
+    new_doc = Document(doc_id=doc_id, filename=file.filename, conversation_id=conv.id)
+    db.session.add(new_doc)
+    db.session.commit()
+
+    return redirect(url_for("construction_assistant.home"))
+
 
 @bp.route("/chat", methods=["POST"])
 def chat():
@@ -85,7 +218,6 @@ def chat():
 
     conv = get_or_create_conversation()
 
-    # Safety net: refuse if this conversation is already capped
     if conv.summary is not None:
         return redirect(url_for("construction_assistant.home"))
 
@@ -101,6 +233,13 @@ def chat():
     else:
         system_prompt = BASE_SYSTEM_PROMPT
 
+    # Two clean paths:
+    #   - relevant evidence found -> RAG path (append excerpts + RAG_SUFFIX)
+    #   - no evidence (or no docs) -> general path, prompt left exactly as-is
+    doc_status, context = retrieve_relevant_context(conv, user_message)
+    if doc_status == "relevant":
+        system_prompt += RAG_SUFFIX.format(context=context)
+
     api_messages = [{"role": m.role, "content": m.content} for m in conv.messages]
 
     reply = client.messages.create(
@@ -112,6 +251,15 @@ def chat():
     assistant_response = reply.content[0].text
     if reply.stop_reason == "max_tokens":
         assistant_response += "\n\n_[Response was cut short — ask a follow-up if you'd like more detail.]_"
+
+    # Documents were uploaded but none matched this question — tell the user
+    # plainly, and mark the general answer that follows as not document-based.
+    if doc_status == "no_match":
+        notice = ("_I couldn't find anything relevant to this question in your "
+                  "uploaded documents, so I can't answer from them — please "
+                  "provide more relevant documents if you need a document-based "
+                  "answer or ask a relevant question. Here's a general answer instead:_\n\n")
+        assistant_response = notice + assistant_response
 
     db.session.add(Message(conversation_id=conv.id, role="assistant", content=assistant_response))
 
@@ -128,4 +276,5 @@ def chat():
         history=render_history(conv.messages),
         locked=locked,
         prefill=None,
+        documents=get_documents_for(conv),
     )
