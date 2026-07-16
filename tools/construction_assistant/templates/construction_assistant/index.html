@@ -42,11 +42,36 @@
       .chat-area { padding: 16px; }
       .assistant-bar { padding: 8px 16px; }
     }
+    .locked-area { flex-direction: column; gap: 12px; text-align: center; }
+    .locked-message { color: var(--text-secondary); font-size: 13px; margin: 0; }
+    .new-chat-btn { display: inline-block; background: var(--accent); color: #fff; text-decoration: none; padding: 10px 20px; border-radius: var(--radius); font-size: 14px; font-family: 'Inter', sans-serif; font-weight: 500; }
+    .new-chat-btn:hover { background: var(--accent-hover); }
   </style>
 
   <div class="assistant-bar">
-    <a href="{{ url_for('construction_assistant.home') }}" class="new-chat">+ new chat</a>
+    <a href="{{ url_for('construction_assistant.new') }}" class="new-chat">+ new chat</a>
   </div>
+
+  <div style="padding: 12px 24px; border-bottom: 1px solid var(--border); font-size: 13px;">
+    <form action="{{ url_for('construction_assistant.upload_doc') }}" method="post" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 10px;">
+        <input type="file" name="doc_file" accept=".pdf">
+        <button type="submit" style="padding: 4px 12px; border-radius: 6px; border: 1px solid var(--border); background: none; cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 12px;">Upload document</button>
+        <span style="color: var(--text-muted);">{{ documents|length }}/3 documents attached</span>
+    </form>
+
+    {% if upload_error %}
+        <p style="color: #c0392b; margin-top: 8px;">{{ upload_error }}</p>
+    {% endif %}
+
+    {% if documents %}
+        <ul style="margin-top: 8px; padding-left: 18px; color: var(--text-secondary);">
+            {% for doc in documents %}
+                <li>{{ doc.filename }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+  </div>
+
 
   <div class="chat-area" id="chatArea">
 
@@ -73,12 +98,25 @@
 
   </div>
 
+  {% if locked %}
+  <div class="input-area locked-area">
+    <p class="locked-message">
+      This conversation has reached its length limit. The summary above has been prepared for you to carry into a fresh chat.
+    </p>
+    <a href="{{ url_for('construction_assistant.home') }}" class="new-chat-btn">Start new chat with this context</a>
+  </div>
+{% else %}
   <form method="POST" action="{{ url_for('construction_assistant.chat') }}">
     <div class="input-area">
-      <textarea name="user_message" rows="1" placeholder="Ask a construction question..."></textarea>
+      <textarea name="user_message" rows="1" placeholder="Ask a construction question...">{% if prefill %}Here's context from my previous chat:
+
+{{ prefill }}
+
+Continuing from there — {% endif %}</textarea>
       <button type="submit">Ask</button>
     </div>
   </form>
+{% endif %}
 
   <script>
     const chatArea = document.getElementById('chatArea');
