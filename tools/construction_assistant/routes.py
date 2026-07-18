@@ -3,7 +3,7 @@ import uuid
 from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify
 import anthropic
 import markdown
-from pypdf import PdfReader
+import fitz
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from extensions import db, doc_collection
@@ -38,7 +38,9 @@ SUMMARY_SUFFIX = " IMPORTANT: This is the final exchange in this conversation. I
 # Appended ONLY when relevant document evidence was found (the RAG path).
 RAG_SUFFIX = """
 
-The user has uploaded documents to this conversation, and the excerpts below were retrieved as relevant to their latest question. Base your answer primarily on these excerpts, citing what the documents say. Where the excerpts don't fully cover the question, you may supplement with general knowledge — but make clear which parts come from the documents and which are general knowledge.
+The user has uploaded documents to this conversation, and the excerpts below were retrieved as relevant to their latest question. Each excerpt is prefixed with its source document and page number.
+
+Base your answer primarily on these excerpts. When you state something drawn from an excerpt, cite it inline in the form (Source: filename, page X) using the exact filename and page shown. Where the excerpts don't fully cover the question, you may supplement with general knowledge — but make clear which parts come from the documents and which are general knowledge, and don't attach a citation to general knowledge.
 
 Relevant excerpts:
 {context}"""
@@ -72,37 +74,6 @@ def get_documents_for(conv):
         return []
     return Document.query.filter_by(conversation_id=conv.id).order_by(Document.uploaded_at).all()
 
-
-def retrieve_relevant_context(conv, question):
-    """Return joined excerpt text if relevant evidence exists, else None.
-
-    Relevance is decided by Chroma's distance on the best-matching chunk:
-    if even the closest chunk is farther than RELEVANCE_THRESHOLD, we treat
-    the documents as not relevant to this question and return None, so the
-    caller falls back to the normal general-answer path.
-    """
-    documents = get_documents_for(conv)
-    if not documents:
-        return None
-
-    doc_ids = [d.doc_id for d in documents]
-    results = doc_collection.query(
-        query_texts=[question],
-        n_results=3,
-        where={"doc_id": {"$in": doc_ids}},
-    )
-
-    chunks = results["documents"][0] if results["documents"] else []
-    distances = results["distances"][0] if results["distances"] else []
-
-    if not chunks or not distances:
-        return None
-
-    # distances come back sorted nearest-first, so distances[0] is the best match
-    if distances[0] > RELEVANCE_THRESHOLD:
-        return None
-
-    return "\n\n---\n\n".join(chunks)
 
 
 @bp.route("/")
@@ -154,15 +125,23 @@ def retrieve_relevant_context(conv, question):
         query_texts=[question],
         n_results=3,
         where={"doc_id": {"$in": doc_ids}},
+        include=["documents", "distances", "metadatas"],
     )
 
     chunks = results["documents"][0] if results["documents"] else []
     distances = results["distances"][0] if results["distances"] else []
+    metadatas = results["metadatas"][0] if results["metadatas"] else []
 
     if not chunks or not distances or distances[0] > RELEVANCE_THRESHOLD:
         return ("no_match", None)
 
-    return ("relevant", "\n\n---\n\n".join(chunks))
+    labelled = []
+    for chunk, meta in zip(chunks, metadatas):
+        filename = meta.get("filename", "unknown document")
+        page = meta.get("page", "?")
+        labelled.append(f"[Source: {filename}, page {page}]\n{chunk}")
+
+    return ("relevant", "\n\n---\n\n".join(labelled))
 
 
 @bp.route("/upload-doc", methods=["POST"])
@@ -194,15 +173,37 @@ def upload_doc():
     save_path = os.path.join(UPLOAD_FOLDER, file.filename)
     file.save(save_path)
 
-    reader = PdfReader(save_path)
-    full_text = "\n".join(page.extract_text() for page in reader.pages)
-
-    splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
-    chunks = splitter.split_text(full_text)
-
     doc_id = str(uuid.uuid4())
+    splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
+
+    chunks = []
+    metadatas = []
+
+    pdf = fitz.open(save_path)
+    for page_number, page in enumerate(pdf, start=1):
+        page_text = page.get_text()
+        if not page_text.strip():
+            continue  # skip blank or image-only pages
+        for chunk in splitter.split_text(page_text):
+            chunks.append(chunk)
+            metadatas.append({
+                "doc_id": doc_id,
+                "filename": file.filename,
+                "page": page_number,
+            })
+    pdf.close()
+
+    if not chunks:
+        return render_template(
+            "construction_assistant/index.html",
+            history=render_history(conv.messages),
+            locked=False,
+            prefill=None,
+            documents=documents,
+            upload_error="Couldn't extract any text from that PDF — it may be a scan or image-only.",
+        )
+
     ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
-    metadatas = [{"doc_id": doc_id} for _ in chunks]
     doc_collection.add(documents=chunks, ids=ids, metadatas=metadatas)
 
     new_doc = Document(doc_id=doc_id, filename=file.filename, conversation_id=conv.id)
