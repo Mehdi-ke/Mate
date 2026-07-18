@@ -170,7 +170,7 @@ def retrieve_relevant_context(conv, question):
     doc_ids = [d.doc_id for d in documents]
     results = doc_collection.query(
         query_texts=[question],
-        n_results=3,
+        n_results=4,
         where={"doc_id": {"$in": doc_ids}},
         include=["documents", "distances", "metadatas"],
     )
@@ -221,7 +221,7 @@ def upload_doc():
     file.save(save_path)
 
     doc_id = str(uuid.uuid4())
-    splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=80)
 
     chunks = []
     metadatas = []
