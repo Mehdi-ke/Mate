@@ -21,8 +21,13 @@ client = anthropic.Anthropic()
 MESSAGE_CAP = 10
 WARNING_AT = 7
 SUMMARY_AT = 9
-MAX_DOCUMENTS = 3
+MAX_DOCUMENTS = 10
 UPLOAD_FOLDER = "instance/uploads"
+
+
+@bp.app_context_processor
+def inject_max_documents():
+    return {"max_documents": MAX_DOCUMENTS}
 
 # Chroma distance below which a retrieved chunk counts as genuinely relevant.
 # Lower = stricter. Tuned against observed distances (~0.55 for a real hit,

@@ -56,7 +56,7 @@
     <form action="{{ url_for('construction_assistant.upload_doc') }}" method="post" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 10px;">
         <input type="file" name="doc_file" accept=".pdf">
         <button type="submit" style="padding: 4px 12px; border-radius: 6px; border: 1px solid var(--border); background: none; cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 12px;">Upload document</button>
-        <span style="color: var(--text-muted);">{{ documents|length }}/3 documents attached</span>
+        <span style="color: var(--text-muted);">{{ documents|length }}/{{ max_documents }} documents attached</span>
     </form>
 
     {% if upload_error %}
@@ -78,7 +78,7 @@
     <div class="msg assistant">
       <span class="msg-label">// assistant</span>
       <div class="msg-bubble">
-        <p>Hello! I'm your construction AI assistant. Ask me anything about estimating, tendering, contracts, BIM, or site management.</p>
+        <p>Ask me about construction, or upload a PDF and I'll answer from it with source citations.</p>
       </div>
     </div>
 
