@@ -113,6 +113,48 @@ def new():
     session.pop("carry_context", None)
     return redirect(url_for("construction_assistant.home"))
 
+REWRITE_PROMPT = """Rewrite the user's latest question into a standalone search query.
+
+Resolve any pronouns or references ("those", "it", "that clause") using the conversation history, so the query makes sense on its own without the history.
+
+Rules:
+- Output ONLY the rewritten query. No preamble, no quotes, no explanation.
+- Keep it short — a search query, not a sentence.
+- If the question is already standalone, return it essentially unchanged.
+
+Conversation so far:
+{history}
+
+Latest question: {question}"""
+
+
+def rewrite_query(conv, question):
+    """Turn a follow-up question into a standalone search query.
+
+    Falls back to the original question if there's no history to resolve
+    against, or if the rewrite call fails for any reason.
+    """
+    previous = conv.messages[:-1]  # exclude the message we just saved
+    if not previous:
+        return question
+
+    recent = previous[-4:]
+    history = "\n".join(f"{m.role}: {m.content[:500]}" for m in recent)
+
+    try:
+        reply = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=100,
+            messages=[{
+                "role": "user",
+                "content": REWRITE_PROMPT.format(history=history, question=question),
+            }],
+        )
+        rewritten = reply.content[0].text.strip()
+        return rewritten if rewritten else question
+    except Exception:
+        return question
+
 def retrieve_relevant_context(conv, question):
     """Decide how uploaded documents relate to this question.
 
@@ -242,7 +284,8 @@ def chat():
     # Two clean paths:
     #   - relevant evidence found -> RAG path (append excerpts + RAG_SUFFIX)
     #   - no evidence (or no docs) -> general path, prompt left exactly as-is
-    doc_status, context = retrieve_relevant_context(conv, user_message)
+    search_query = rewrite_query(conv, user_message)
+    doc_status, context = retrieve_relevant_context(conv, search_query)
     if doc_status == "relevant":
         system_prompt += RAG_SUFFIX.format(context=context)
 
@@ -261,10 +304,9 @@ def chat():
     # Documents were uploaded but none matched this question — tell the user
     # plainly, and mark the general answer that follows as not document-based.
     if doc_status == "no_match":
-        notice = ("_I couldn't find anything relevant to this question in your "
-                  "uploaded documents, so I can't answer from them — please "
-                  "provide more relevant documents if you need a document-based "
-                  "answer or ask a relevant question. Here's a general answer instead:_\n\n")
+        notice = ("_I didn't find a direct match for this question in your uploaded "
+                  "documents. The answer below may draw on our earlier conversation "
+                  "or general knowledge rather than the documents themselves._\n\n")
         assistant_response = notice + assistant_response
 
     db.session.add(Message(conversation_id=conv.id, role="assistant", content=assistant_response))
