@@ -4,3 +4,5 @@ __pycache__/
 instance/
 .claude/
 scripts/
+.pytest_cache/
+.pytest_cache/

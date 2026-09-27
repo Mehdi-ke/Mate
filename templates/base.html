@@ -8,8 +8,28 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <nav><a href="{{ url_for('home') }}">Mate</a></nav>
+    <nav>
+        <a href="{{ url_for('home') }}">Mate</a>
+        {% if current_user.is_authenticated %}
+        <div class="nav-account">
+            <a href="{{ url_for('account') }}">{{ current_user.email }}</a>
+            <form method="post" action="{{ url_for('auth.logout') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit">Sign out</button>
+            </form>
+        </div>
+        {% endif %}
+    </nav>
     <main>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages" aria-live="polite">
+                {% for category, message in messages %}
+                    <p class="flash flash-{{ category }}">{{ message }}</p>
+                {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
         {% block content %}{% endblock %}
     </main>
 </body>

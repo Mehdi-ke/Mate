@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="auth-card">
+    <h1>Something needs your attention</h1>
+    <p>{{ message }}</p>
+    <p><a href="{{ request.referrer or url_for('home') }}">Go back</a></p>
+</section>
+{% endblock %}

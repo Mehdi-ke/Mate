@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="auth-card">
+    <h1>Create your Mate account</h1>
+    <p>Use at least 12 characters for your password.</p>
+    <form method="post" novalidate>
+        {{ form.hidden_tag() }}
+        <label for="{{ form.email.id }}">{{ form.email.label.text }}</label>
+        {{ form.email(autocomplete="email", inputmode="email") }}
+        {% for error in form.email.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+        <label for="{{ form.password.id }}">{{ form.password.label.text }}</label>
+        {{ form.password(autocomplete="new-password") }}
+        {% for error in form.password.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+        {{ form.submit(class_="button") }}
+    </form>
+    <p class="auth-switch">Already have an account? <a href="{{ url_for('auth.login') }}">Sign in</a>.</p>
+</section>
+{% endblock %}
