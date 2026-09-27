@@ -1,12 +1,16 @@
 import os
 import uuid
 from flask import Blueprint, render_template, request, redirect, url_for
-from pypdf import PdfReader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 import anthropic
 
 from extensions import db, doc_collection
 from models import Document
+from tools.document_processing import (
+    RELEVANCE_THRESHOLD,
+    extract_pages,
+    chunk_pages,
+    rerank_chunks,
+)
 
 bp = Blueprint(
     "doc_qa",
@@ -22,7 +26,7 @@ UPLOAD_FOLDER = "instance/uploads"
 
 @bp.route("/")
 def index():
-    documents = Document.query.order_by(Document.uploaded_at.desc()).all()
+    documents = Document.query.filter_by(conversation_id=None).order_by(Document.uploaded_at.desc()).all()
     return render_template("doc_qa/index.html", documents=documents)
 
 
@@ -36,15 +40,19 @@ def upload():
     save_path = os.path.join(UPLOAD_FOLDER, file.filename)
     file.save(save_path)
 
-    reader = PdfReader(save_path)
-    full_text = "\n".join(page.extract_text() for page in reader.pages)
-
-    splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
-    chunks = splitter.split_text(full_text)
-
     doc_id = str(uuid.uuid4())
+    pages = extract_pages(save_path)
+    chunks, metadatas = chunk_pages(pages, doc_id, file.filename)
+
+    if not chunks:
+        documents = Document.query.filter_by(conversation_id=None).order_by(Document.uploaded_at.desc()).all()
+        return render_template(
+            "doc_qa/index.html",
+            documents=documents,
+            ask_error="Couldn't extract any text from that PDF — it may be a scan or image-only.",
+        )
+
     ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
-    metadatas = [{"doc_id": doc_id} for _ in chunks]
     doc_collection.add(documents=chunks, ids=ids, metadatas=metadatas)
 
     new_doc = Document(doc_id=doc_id, filename=file.filename)
@@ -60,26 +68,63 @@ def ask():
     question = request.form["question"]
 
     document = Document.query.filter_by(doc_id=doc_id).first()
-    documents_list = Document.query.order_by(Document.uploaded_at.desc()).all()
+    documents_list = Document.query.filter_by(conversation_id=None).order_by(Document.uploaded_at.desc()).all()
 
     if not document:
-        return render_template("doc_qa/index.html", documents=documents_list,
-                                ask_error="Document not found.")
+        return render_template(
+            "doc_qa/index.html",
+            documents=documents_list,
+            ask_error="Document not found.",
+        )
 
     results = doc_collection.query(
         query_texts=[question],
-        n_results=3,
+        n_results=10,
         where={"doc_id": doc_id},
+        include=["documents", "distances", "metadatas"],
     )
-    retrieved_chunks = results["documents"][0]
 
-    if not retrieved_chunks:
-        return render_template("doc_qa/index.html", documents=documents_list,
-                                ask_error="No content found for this document.")
+    chunks = results["documents"][0] if results["documents"] else []
+    distances = results["distances"][0] if results["distances"] else []
+    metadatas = results["metadatas"][0] if results["metadatas"] else []
 
-    context = "\n\n---\n\n".join(retrieved_chunks)
+    if not chunks or not distances:
+        return render_template(
+            "doc_qa/index.html",
+            documents=documents_list,
+            ask_error="No content found for this document.",
+        )
+
+    # Re-rank: filter by threshold, diversify across pages
+    filtered_chunks, filtered_metas = rerank_chunks(
+        chunks, distances, metadatas,
+        max_per_page=3,
+        max_total=6,
+        threshold=RELEVANCE_THRESHOLD,
+    )
+
+    if not filtered_chunks:
+        return render_template(
+            "doc_qa/index.html",
+            documents=documents_list,
+            asked_document=document,
+            question=question,
+            answer="No relevant passages found in this document for that question. "
+                   "Try rephrasing or asking about a different topic.",
+        )
+
+    # Build context with source labels for citations
+    labelled = []
+    for chunk, meta in zip(filtered_chunks, filtered_metas):
+        page = meta.get("page", "?")
+        labelled.append(f"[Page {page}]\n{chunk}")
+    context = "\n\n---\n\n".join(labelled)
+
     prompt = f"""Answer the question using ONLY the excerpts below. If the
 excerpts don't contain the answer, say so - do not use outside knowledge.
+
+When you state something drawn from an excerpt, cite it inline in the form
+(Page X). Where the excerpts don't fully cover the question, say so explicitly.
 
 Excerpts:
 {context}
@@ -93,6 +138,20 @@ Question: {question}"""
     )
     answer = message.content[0].text
 
-    return render_template("doc_qa/index.html", documents=documents_list,
-                            asked_document=document, question=question,
-                            answer=answer, retrieved_chunks=retrieved_chunks)
+    # Build source list for the UI
+    sources = []
+    seen_pages = set()
+    for meta in filtered_metas:
+        page = meta.get("page")
+        if page and page not in seen_pages:
+            sources.append({"page": page, "filename": meta.get("filename", "")})
+            seen_pages.add(page)
+
+    return render_template(
+        "doc_qa/index.html",
+        documents=documents_list,
+        asked_document=document,
+        question=question,
+        answer=answer,
+        sources=sorted(sources, key=lambda s: s["page"]),
+    )

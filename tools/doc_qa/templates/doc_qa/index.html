@@ -1,14 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
 <h1>Document Q&A</h1>
 
 <form action="{{ url_for('doc_qa.upload') }}" method="post" enctype="multipart/form-data">
     <input type="file" name="pdf_file" accept=".pdf" required>
-    <button type="submit">Upload</button>
+    <button type="submit" class="button">Upload</button>
 </form>
 
 <h2>Uploaded documents</h2>
 <ul>
     {% for doc in documents %}
-        <li>{{ doc.filename }} — uploaded {{ doc.uploaded_at }} (doc_id: {{ doc.doc_id }})</li>
+        <li>{{ doc.filename }} — uploaded {{ doc.uploaded_at.strftime('%d %b %Y') if doc.uploaded_at else 'unknown' }}</li>
     {% endfor %}
 </ul>
 
@@ -20,21 +23,26 @@
         {% endfor %}
     </select>
     <input type="text" name="question" placeholder="Ask a question about this document" required>
-    <button type="submit">Ask</button>
+    <button type="submit" class="button">Ask</button>
 </form>
 
 {% if ask_error %}
-    <p style="color:red">{{ ask_error }}</p>
+    <p style="color: #7d2525">{{ ask_error }}</p>
 {% endif %}
 
 {% if answer %}
     <h3>Question: {{ question }}</h3>
     <p><strong>Answer:</strong> {{ answer }}</p>
 
+    {% if sources %}
     <details>
-        <summary>Retrieved excerpts</summary>
-        {% for chunk in retrieved_chunks %}
-            <p>{{ chunk }}</p>
-        {% endfor %}
+        <summary>Sources ({{ sources|length }} page{{ 's' if sources|length != 1 }})</summary>
+        <ul>
+            {% for s in sources %}
+                <li>Page {{ s.page }}{% if s.filename %} — {{ s.filename }}{% endif %}</li>
+            {% endfor %}
+        </ul>
     </details>
+    {% endif %}
 {% endif %}
+{% endblock %}

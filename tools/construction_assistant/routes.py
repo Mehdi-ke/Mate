@@ -1,13 +1,17 @@
 import os
 import uuid
-from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify
+from flask import Blueprint, render_template, request, session, redirect, url_for
 import anthropic
 import markdown
-import fitz
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from extensions import db, doc_collection
 from models import Conversation, Message, Document
+from tools.document_processing import (
+    RELEVANCE_THRESHOLD,
+    extract_pages,
+    chunk_pages,
+    rerank_chunks,
+)
 
 bp = Blueprint(
     "construction_assistant",
@@ -18,7 +22,6 @@ bp = Blueprint(
 
 client = anthropic.Anthropic()
 
-MESSAGE_CAP = 10
 WARNING_AT = 7
 SUMMARY_AT = 9
 MAX_DOCUMENTS = 10
@@ -29,10 +32,6 @@ UPLOAD_FOLDER = "instance/uploads"
 def inject_max_documents():
     return {"max_documents": MAX_DOCUMENTS}
 
-# Chroma distance below which a retrieved chunk counts as genuinely relevant.
-# Lower = stricter. Tuned against observed distances (~0.55 for a real hit,
-# ~1.3 for an unrelated chunk). Adjust after testing with your own documents.
-RELEVANCE_THRESHOLD = 1.5
 
 BASE_SYSTEM_PROMPT = "You are a construction technology advisor specialising in the UK construction industry. Provide clear, practical, and accurate guidance on construction technology, digital workflows, BIM, UK contract forms, CDM Regulations, site management, project delivery, and industry best practices. Tailor responses to UK standards and terminology, explain technical concepts in a concise and professional manner, highlight compliance or safety considerations where relevant, and acknowledge uncertainty rather than making unsupported assumptions. Match the length of your response to the depth of the question — be brief for simple questions and thorough for complex ones, but never pad."
 
@@ -80,7 +79,6 @@ def get_documents_for(conv):
     return Document.query.filter_by(conversation_id=conv.id).order_by(Document.uploaded_at).all()
 
 
-
 @bp.route("/")
 def home():
     carry = session.pop("carry_context", None)
@@ -113,6 +111,7 @@ def new():
     session.pop("carry_context", None)
     return redirect(url_for("construction_assistant.home"))
 
+
 REWRITE_PROMPT = """Rewrite the user's latest question into a standalone search query.
 
 Resolve any pronouns or references ("those", "it", "that clause") using the conversation history, so the query makes sense on its own without the history.
@@ -134,7 +133,7 @@ def rewrite_query(conv, question):
     Falls back to the original question if there's no history to resolve
     against, or if the rewrite call fails for any reason.
     """
-    previous = conv.messages[:-1]  # exclude the message we just saved
+    previous = conv.messages[:-1]
     if not previous:
         return question
 
@@ -155,6 +154,7 @@ def rewrite_query(conv, question):
     except Exception:
         return question
 
+
 def retrieve_relevant_context(conv, question):
     """Decide how uploaded documents relate to this question.
 
@@ -170,7 +170,7 @@ def retrieve_relevant_context(conv, question):
     doc_ids = [d.doc_id for d in documents]
     results = doc_collection.query(
         query_texts=[question],
-        n_results=4,
+        n_results=10,
         where={"doc_id": {"$in": doc_ids}},
         include=["documents", "distances", "metadatas"],
     )
@@ -179,11 +179,22 @@ def retrieve_relevant_context(conv, question):
     distances = results["distances"][0] if results["distances"] else []
     metadatas = results["metadatas"][0] if results["metadatas"] else []
 
-    if not chunks or not distances or distances[0] > RELEVANCE_THRESHOLD:
+    if not chunks or not distances:
+        return ("no_match", None)
+
+    # Re-rank: filter by threshold, diversify across pages
+    filtered_chunks, filtered_metas = rerank_chunks(
+        chunks, distances, metadatas,
+        max_per_page=3,
+        max_total=6,
+        threshold=RELEVANCE_THRESHOLD,
+    )
+
+    if not filtered_chunks:
         return ("no_match", None)
 
     labelled = []
-    for chunk, meta in zip(chunks, metadatas):
+    for chunk, meta in zip(filtered_chunks, filtered_metas):
         filename = meta.get("filename", "unknown document")
         page = meta.get("page", "?")
         labelled.append(f"[Source: {filename}, page {page}]\n{chunk}")
@@ -221,24 +232,8 @@ def upload_doc():
     file.save(save_path)
 
     doc_id = str(uuid.uuid4())
-    splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=80)
-
-    chunks = []
-    metadatas = []
-
-    pdf = fitz.open(save_path)
-    for page_number, page in enumerate(pdf, start=1):
-        page_text = page.get_text()
-        if not page_text.strip():
-            continue  # skip blank or image-only pages
-        for chunk in splitter.split_text(page_text):
-            chunks.append(chunk)
-            metadatas.append({
-                "doc_id": doc_id,
-                "filename": file.filename,
-                "page": page_number,
-            })
-    pdf.close()
+    pages = extract_pages(save_path)
+    chunks, metadatas = chunk_pages(pages, doc_id, file.filename)
 
     if not chunks:
         return render_template(
@@ -281,9 +276,6 @@ def chat():
     else:
         system_prompt = BASE_SYSTEM_PROMPT
 
-    # Two clean paths:
-    #   - relevant evidence found -> RAG path (append excerpts + RAG_SUFFIX)
-    #   - no evidence (or no docs) -> general path, prompt left exactly as-is
     search_query = rewrite_query(conv, user_message)
     doc_status, context = retrieve_relevant_context(conv, search_query)
     if doc_status == "relevant":
@@ -301,8 +293,6 @@ def chat():
     if reply.stop_reason == "max_tokens":
         assistant_response += "\n\n_[Response was cut short — ask a follow-up if you'd like more detail.]_"
 
-    # Documents were uploaded but none matched this question — tell the user
-    # plainly, and mark the general answer that follows as not document-based.
     if doc_status == "no_match":
         notice = ("_I didn't find a direct match for this question in your uploaded "
                   "documents. The answer below may draw on our earlier conversation "
