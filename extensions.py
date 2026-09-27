@@ -3,7 +3,6 @@ from flask_login import LoginManager
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
 import chromadb
-from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -21,14 +20,23 @@ chroma_client = chromadb.PersistentClient(path="instance/chroma_store")
 # Embedding function: BAAI/bge-base-en-v1.5 significantly outperforms
 # the default MiniLM for construction/legal document retrieval.
 # Model downloads on first use (~400 MB).
-_embedding_fn = SentenceTransformerEmbeddingFunction(
-    model_name="BAAI/bge-base-en-v1.5",
-)
+# Falls back to ChromaDB's default (all-MiniLM-L6-v2) if
+# sentence-transformers is not yet installed.
+try:
+    from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 
-# v2 collection uses bge-base-en-v1.5 embeddings.  The old
-# "mate_documents" collection (MiniLM embeddings) is left in place
-# but unused — re-upload documents to populate the new collection.
-doc_collection = chroma_client.get_or_create_collection(
-    name="mate_documents_v2",
-    embedding_function=_embedding_fn,
-)
+    _embedding_fn = SentenceTransformerEmbeddingFunction(
+        model_name="BAAI/bge-base-en-v1.5",
+    )
+    _collection_name = "mate_documents_v2"
+except (ImportError, ValueError):
+    _embedding_fn = None
+    _collection_name = "mate_documents"
+
+if _embedding_fn:
+    doc_collection = chroma_client.get_or_create_collection(
+        name=_collection_name,
+        embedding_function=_embedding_fn,
+    )
+else:
+    doc_collection = chroma_client.get_or_create_collection(name=_collection_name)
